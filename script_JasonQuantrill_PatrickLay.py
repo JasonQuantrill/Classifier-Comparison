@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from IPython.display import display
 
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -14,12 +15,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 
 from ucimlrepo import fetch_ucirepo
-
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.models import Sequential
 
 import xgboost as xgb
 
@@ -137,11 +132,57 @@ print('\n================== features dataframe shape after preprocessing =======
 print(X3.shape)
 
 
+################
+## Visualizations
+
+int_columns = ['age','fnlwgt','education-num','capital-gain','capital-loss','hours-per-week']
+for i in int_columns:
+  sns.boxplot(x = df[i])
+  plt.show()
+
+  high_income_df = df[df['income>50K'] == 1]
+
+# Group by country and calculate mean age
+mean_age_by_country = high_income_df.groupby('native-country')['age'].mean().sort_values()
+
+# Plotting
+plt.figure(figsize=(10, 10))
+mean_age_by_country.plot(kind='barh')
+plt.title('Mean Age with >50K Income by Country')
+plt.xlabel('Mean Age')
+plt.ylabel('Country')
+plt.tight_layout()
+plt.show()
+plt.figure(figsize=(10, 6))
+
+income_count_by_education = high_income_df['education-num'].value_counts().sort_index()
+income_count_by_education.plot(kind='bar')
+plt.title('>50K Count vs Education Level')
+plt.xlabel('Education Level')
+plt.ylabel('>50K Income Count')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# Plotting
+plt.figure(figsize=(13, 13))
+sns.barplot(x="workclass", y="age", hue='income>50K', data=df, palette="viridis")
+plt.xlabel("Workclass")
+plt.ylabel("Age")
+plt.title("Workclass vs Age by Income")
+plt.show()
+
+
+
+
+
+
+
 ##################
 ## Classifier Implementation
 
 # Split training and test data
-X_train, X_test, y_train, y_test = train_test_split(X3, y3, test_size=0.2, random_state=1)
+X_train, X_test, y_train, y_test = train_test_split(X3, np.ravel(y3), test_size=0.2, random_state=1)
 
 ##################
 ## Logistic Regression
@@ -300,3 +341,86 @@ feature_importances = best_model.named_steps['rf'].feature_importances_
 print('\n================== Feature Importance ==================')
 for feature, importance in zip(X_train.columns, feature_importances):
     print(f"{feature}: {importance}")
+
+
+
+##################
+## Support Vector Machine
+
+# Create a pipeline that standardizes the data then creates an SVM
+pipeline = Pipeline([
+    ('scaler', StandardScaler()), 
+    ('svm', SVC())                 
+])
+
+# Define the parameter grid
+param_grid = {
+    'svm__C': [0.1, 1, 10],                # Regularization parameter
+    'svm__kernel': ['linear', 'rbf'],     # Type of SVM kernel
+    'svm__gamma': ['scale', 'auto']       # Kernel coefficient
+}
+
+# Initialize the GridSearchCV object
+grid_search = GridSearchCV(estimator=pipeline, param_grid=param_grid, cv=5, scoring='accuracy', verbose=1)
+
+# Fit the GridSearchCV object to the training data
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters and the best score
+print("Best parameters found: ", grid_search.best_params_)
+print("Best accuracy found: ", grid_search.best_score_)
+
+# Evaluate the best model found by GridSearchCV on the test set
+best_model = grid_search.best_estimator_
+test_accuracy = best_model.score(X_test, y_test)
+print('\n================== test accuracy ==================')
+print(test_accuracy)
+
+y_pred = best_model.predict(X_test)
+
+# Print Confusion Matrix
+print('\n================== confusion matrix ==================')
+print(confusion_matrix(y_test, y_pred))
+
+# Print Classification Report
+print('\n================== classification report ==================')
+print(classification_report(y_test, y_pred))
+
+
+
+
+# Initialize the XGBClassifier
+xgb_classifier = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+
+# Define the parameter grid
+param_grid = {
+    'n_estimators': [100, 200, 300],  # Number of trees
+    'learning_rate': [0.01, 0.05, 0.1],  # Step size shrinkage used to prevent overfitting
+    'max_depth': [3, 4, 5],  # Maximum depth of a tree
+    'colsample_bytree': [0.7, 0.8],  # Subsample ratio of columns when constructing each tree
+    'subsample': [0.7, 0.8]  # Subsample ratio of the training instances
+}
+
+# Initialize the GridSearchCV object
+grid_search = GridSearchCV(estimator=xgb_classifier, param_grid=param_grid, cv=5, scoring='accuracy', verbose=1)
+
+# Fit the GridSearchCV object to the training data
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters and the best score
+print("Best parameters found: ", grid_search.best_params_)
+print("Best accuracy found: ", grid_search.best_score_)
+
+# Evaluate the best model found by GridSearchCV on the test set
+best_model = grid_search.best_estimator_
+y_pred = best_model.predict(X_test)
+print('\n================== test accuracy ==================')
+print(test_accuracy)
+
+# Print Confusion Matrix
+print('\n================== confusion matrix ==================')
+print(confusion_matrix(y_test, y_pred))
+
+# Print Classification Report
+print('\n================== classification report ==================')
+print(classification_report(y_test, y_pred))
